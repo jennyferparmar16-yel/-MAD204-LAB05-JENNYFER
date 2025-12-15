@@ -34,32 +34,41 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
-
+// MainActivity handles all UI interactions and app logic
 class MainActivity : AppCompatActivity() {
 
-    // UI components
+    // Buttons used for user actions
     private lateinit var pickMediaButton: Button
     private lateinit var addFavoriteButton: Button
     private lateinit var exportButton: Button
     private lateinit var importButton: Button
 
+    // Views used to display selected media
     private lateinit var imageView: ImageView
     private lateinit var videoView: VideoView
+
+    // RecyclerView to display list of favorite media
     private lateinit var recyclerView: RecyclerView
 
-    // Database and adapter
+    // Room database instance
     private lateinit var db: FavoriteDatabase
+
+    // Adapter for RecyclerView
     private lateinit var adapter: FavoritesAdapter
 
-    // SharedPreferences and JSON helper
+    // SharedPreferences to store last opened media and exported JSON
     private val prefs by lazy { getSharedPreferences("prefs", MODE_PRIVATE) }
+
+    // Gson instance for converting objects to/from JSON
     private val gson = Gson()
 
-    // Currently selected media
+    // Holds URI of currently selected media
     private var selectedUri: Uri? = null
-    private var selectedType: String? = null // image or video
 
-    // Media picker (single selection)
+    // Holds type of selected media (image or video)
+    private var selectedType: String? = null
+
+    // Launcher for picking media from device storage
     private val pickMediaLauncher =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
@@ -70,11 +79,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Enable edge-to-edge layout
+        // Enable edge-to-edge UI layout
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
-        // Apply window insets for system bars
+        // Apply padding to avoid overlap with system bars
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(
@@ -86,7 +95,7 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Initialize views
+        // Link UI components with XML views
         pickMediaButton = findViewById(R.id.pickMediaButton)
         addFavoriteButton = findViewById(R.id.addFavoriteButton)
         exportButton = findViewById(R.id.exportButton)
@@ -99,52 +108,53 @@ class MainActivity : AppCompatActivity() {
         // Initialize Room database
         db = FavoriteDatabase.getInstance(this)
 
-        // Setup RecyclerView
+        // Setup RecyclerView adapter and delete callback
         adapter = FavoritesAdapter(mutableListOf()) { media, _ ->
             deleteWithUndo(media)
         }
 
+        // Configure RecyclerView layout and adapter
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
 
-        // Button actions
+        // Launch media picker when button is clicked
         pickMediaButton.setOnClickListener {
             pickMediaLauncher.launch("*/*")
         }
 
+        // Add currently selected media to favorites
         addFavoriteButton.setOnClickListener {
             addSelectedToFavorites()
         }
 
+        // Export favorites list to JSON
         exportButton.setOnClickListener {
             exportFavorites()
         }
 
+        // Import favorites list from JSON
         importButton.setOnClickListener {
             importFavorites()
         }
 
-        // Load last opened media and favorites
+        // Restore last opened media and reload favorites list
         loadLastMedia()
         reloadFavorites()
     }
 
-    /*
-    Handle media picked from gallery
-    */
+    // Handle media selected from gallery
     private fun handlePickedMedia(uri: Uri) {
         selectedUri = uri
         selectedType = getMediaType(uri)
 
+        // Display selected media
         displayMedia(uri, selectedType)
 
-        // Save last opened media
+        // Save last opened media URI
         prefs.edit().putString("last_uri", uri.toString()).apply()
     }
 
-    /*
-    Determine if the selected media is image or video
-    */
+    // Determine whether selected media is image or video
     private fun getMediaType(uri: Uri): String? {
         val mimeType = contentResolver.getType(uri) ?: return null
         return when {
@@ -154,9 +164,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /*
-    Display image or video based on type
-    */
+    // Display selected media in ImageView or VideoView
     private fun displayMedia(uri: Uri, type: String?) {
         if (type == "image") {
             imageView.visibility = View.VISIBLE
@@ -170,15 +178,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /*
-    Add selected media to favorites database
-    */
+    // Save selected media into Room database
     private fun addSelectedToFavorites() {
         if (selectedUri == null || selectedType == null) {
             Snackbar.make(recyclerView, "Please pick media first", Snackbar.LENGTH_SHORT).show()
             return
         }
 
+        // Insert favorite media into database
         db.favoriteDao().insert(
             FavoriteMedia(
                 uri = selectedUri.toString(),
@@ -186,21 +193,18 @@ class MainActivity : AppCompatActivity() {
             )
         )
 
+        // Refresh RecyclerView
         reloadFavorites()
         Snackbar.make(recyclerView, "Added to favorites", Snackbar.LENGTH_SHORT).show()
     }
 
-    /*
-    Reload favorites from database into RecyclerView
-    */
+    // Load all favorites from database
     private fun reloadFavorites() {
         val list = db.favoriteDao().getAllFavorites()
         adapter.update(list)
     }
 
-    /*
-    Delete favorite with Snackbar UNDO option
-    */
+    // Delete a favorite item with undo option
     private fun deleteWithUndo(media: FavoriteMedia) {
         db.favoriteDao().delete(media)
         reloadFavorites()
@@ -215,9 +219,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /*
-    Export favorites to JSON using GSON
-    */
+    // Convert favorites list to JSON and save it
     private fun exportFavorites() {
         val favorites = db.favoriteDao().getAllFavorites()
         val json = gson.toJson(favorites)
@@ -228,9 +230,7 @@ class MainActivity : AppCompatActivity() {
         Snackbar.make(recyclerView, "Favorites exported (Logcat)", Snackbar.LENGTH_SHORT).show()
     }
 
-    /*
-    Import favorites from JSON and save to database
-    */
+    // Read JSON and insert favorites back into database
     private fun importFavorites() {
         val json = prefs.getString("export_json", null)
 
@@ -252,9 +252,7 @@ class MainActivity : AppCompatActivity() {
         Snackbar.make(recyclerView, "Favorites imported", Snackbar.LENGTH_SHORT).show()
     }
 
-    /*
-    Load last opened media on app restart
-    */
+    // Restore last opened media when app restarts
     private fun loadLastMedia() {
         val uriString = prefs.getString("last_uri", null) ?: return
         val uri = Uri.parse(uriString)

@@ -15,11 +15,17 @@ package com.example.lab5_jennyfer.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+// Entity annotation creates a database table named "favorites"
 @Entity(tableName = "favorites")
 data class FavoriteMedia(
+
+    // Primary key for the favorites table
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
 
+    // Stores the URI of the selected media
     val uri: String,
-    val type: String // image or video
+
+    // Stores the type of media: image or video
+    val type: String
 )
